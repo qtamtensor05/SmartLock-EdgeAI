@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -14,12 +15,16 @@ class EmbeddingResult:
 
 
 class MobileFaceNet:
-    def __init__(self, path: str | Path, embedding_dim: int = 128, device: str = "cpu"):
+    def __init__(self, path: str | Path, embedding_dim: int = 128, device: str = "cpu",
+                 expected_sha256: str | None = None):
         self.path = Path(path)
         self.embedding_dim = embedding_dim
         self.device = torch.device(device)
         if not self.path.is_file():
             raise FileNotFoundError(f"TorchScript model not found: {self.path}")
+        self.checkpoint_sha256 = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        if expected_sha256 and self.checkpoint_sha256 != expected_sha256.lower():
+            raise ValueError("TorchScript checkpoint SHA-256 mismatch")
         self.model = torch.jit.load(str(self.path), map_location=self.device)
         self.model.eval()
 

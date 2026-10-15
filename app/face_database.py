@@ -16,17 +16,23 @@ PERSON_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 class FaceDatabase:
     def __init__(self, path: str | Path, model_version: str, embedding_dim: int = 128,
-                 max_samples_per_person: int = 20):
+                 max_samples_per_person: int = 20, pipeline_version: str | None = None,
+                 allow_legacy_pipeline: bool = True):
         self.path = Path(path)
         self.model_version = model_version
         self.embedding_dim = embedding_dim
         self.max_samples = max_samples_per_person
+        self.pipeline_version = pipeline_version
+        self.allow_legacy_pipeline = allow_legacy_pipeline
         self._lock = threading.RLock()
         self._data = self._load()
 
     def _empty(self) -> dict:
-        return {"schemaVersion": "1.0", "modelVersion": self.model_version,
+        data = {"schemaVersion": "1.0", "modelVersion": self.model_version,
                 "embeddingDim": self.embedding_dim, "persons": {}}
+        if self.pipeline_version is not None:
+            data["pipelineVersion"] = self.pipeline_version
+        return data
 
     def _load(self) -> dict:
         if not self.path.exists():
@@ -35,6 +41,13 @@ class FaceDatabase:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             if data.get("modelVersion") != self.model_version or data.get("embeddingDim") != self.embedding_dim:
                 raise ValueError("Face database model version or embedding dimension mismatch")
+            stored_pipeline = data.get("pipelineVersion")
+            if self.pipeline_version is not None:
+                if stored_pipeline is None and not self.allow_legacy_pipeline:
+                    raise ValueError("Legacy face database has no preprocessing pipeline version")
+                if stored_pipeline is not None and stored_pipeline != self.pipeline_version:
+                    raise ValueError("Face database preprocessing pipeline version mismatch")
+                data["pipelineVersion"] = self.pipeline_version
             if not isinstance(data.get("persons"), dict):
                 raise ValueError("Face database persons field is invalid")
             for person_id, samples in data["persons"].items():

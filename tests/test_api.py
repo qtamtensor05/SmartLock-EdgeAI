@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 
 import numpy as np
 from fastapi.testclient import TestClient
@@ -16,6 +17,8 @@ class Database:
 
 class Pipeline:
     database = Database()
+    preprocessor = SimpleNamespace(mode="current", version="preprocess-rgb-mean05-v1")
+    pipeline_version = "pipeline-test"
     def process(self, _payload, include_embedding=False):
         return PipelineResult(PipelineStatus.UNKNOWN, 12.3,
                               embedding=np.ones(128) if include_embedding else None)
@@ -24,7 +27,8 @@ class Pipeline:
 @asynccontextmanager
 async def fake_lifespan(application):
     application.state.config = {"transport": {"max_jpeg_bytes": 1_048_576, "request_timeout_seconds": 1},
-                                "model": {"name": "MobileFaceNet", "version": "fp32-v1"}}
+                                "model": {"name": "MobileFaceNet", "version": "fp32-v1",
+                                          "checkpoint_sha256": "780e31e7c2639a0d5fdebe843f5df3ff81fda79a090164df0ff40514d172853a"}}
     application.state.pipeline = Pipeline()
     application.state.startup_error = None
     yield
@@ -39,6 +43,7 @@ def test_predict_raw_jpeg_schema():
         assert response.status_code == 200
         assert response.json()["frameId"] == "f-1"
         assert response.json()["status"] == "UNKNOWN"
+        assert response.json()["model"]["preprocessingMode"] == "current"
         assert "embedding" not in response.json()
     finally:
         app.router.lifespan_context = original

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import os
 from contextlib import asynccontextmanager
@@ -27,19 +28,28 @@ def error(status: int, code: str, message: str) -> JSONResponse:
 
 def build_pipeline(config: dict) -> FacePipeline:
     database_path = os.getenv("SMARTLOCK_DATABASE_PATH", config["storage"]["path"])
+    preprocessor = FacePreprocessor(config["input"])
+    alignment = config["alignment"]
+    identity_source = "|".join([
+        config["model"]["checkpoint_sha256"].lower(), preprocessor.version, "RGB",
+        alignment["template"], f'{config["input"]["width"]}x{config["input"]["height"]}',
+    ])
+    pipeline_version = "pipeline-" + hashlib.sha256(identity_source.encode("utf-8")).hexdigest()[:16]
     database = FaceDatabase(resolve_path(database_path), config["model"]["version"],
                             config["model"]["embedding_dim"],
-                            config["storage"]["max_samples_per_person"])
+                            config["storage"]["max_samples_per_person"], pipeline_version,
+                            allow_legacy_pipeline=preprocessor.mode == "current")
     return FacePipeline(
         JPEGDecoder(config["transport"]["max_jpeg_bytes"], config["transport"]["max_decoded_pixels"]),
         YuNetFaceDetector(resolve_path(config["detector"]["model_path"]),
                           config["detector"]["confidence_threshold"],
                           config["detector"]["nms_threshold"], config["detector"]["top_k"]),
-        FacePreprocessor(config["input"]),
+        preprocessor,
         MobileFaceNet(resolve_path(config["model"]["path"]),
-                      config["model"]["embedding_dim"], config["model"]["device"]),
+                      config["model"]["embedding_dim"], config["model"]["device"],
+                      config["model"]["checkpoint_sha256"]),
         FaceMatcher(config["matching"]["cosine_threshold"]), database,
-        config["quality"]["low_light_mean_luma"])
+        config["quality"]["low_light_mean_luma"], pipeline_version)
 
 
 @asynccontextmanager
@@ -118,8 +128,14 @@ async def predict(request: Request, frame_id: str | None = Header(default=None, 
     except TimeoutError:
         return error(504, "PROCESSING_TIMEOUT", "Frame processing timed out")
     model = request.app.state.config["model"]
+    preprocessing = pipeline.preprocessor
     return PredictionResponse(frameId=frame_id, status=result.status, personId=result.person_id,
-                              similarity=result.similarity, model=ModelInfo(name=model["name"], version=model["version"]),
+                              similarity=result.similarity, model=ModelInfo(
+                                  name=model["name"], version=model["version"],
+                                  checkpointSha256=model["checkpoint_sha256"],
+                                  preprocessingMode=preprocessing.mode,
+                                  preprocessingVersion=preprocessing.version,
+                                  pipelineVersion=pipeline.pipeline_version),
                               processingMs=round(result.processing_ms, 3))
 
 

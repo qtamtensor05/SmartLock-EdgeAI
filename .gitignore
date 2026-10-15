@@ -7,5 +7,6 @@ __pycache__/
 data/*.json
 data/*.tmp
 benchmark_results.json
+validation_results/
 !models/mobilefacenet_scripted.pt
 tmp/

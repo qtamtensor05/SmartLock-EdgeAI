@@ -2,6 +2,8 @@ model:
   path: models/mobilefacenet_scripted.pt
   name: MobileFaceNet
   version: fp32-v1
+  artifact_id: mobilefacenet-fp32-v1
+  checkpoint_sha256: 780e31e7c2639a0d5fdebe843f5df3ff81fda79a090164df0ff40514d172853a
   embedding_dim: 128
   device: cpu
 detector:
@@ -18,11 +20,28 @@ input:
   pixel_range: [0, 255]
   interpolation: linear
   normalization:
-    formula: "(pixel * scale - mean) / std"
-    scale: 0.00392156862745098
-    mean: [0.5, 0.5, 0.5]
-    std: [0.5, 0.5, 0.5]
+    mode: current
+    version: preprocess-rgb-mean05-v1
     verified_against_training: false
+    modes:
+      current:
+        formula: "(pixel / 255.0 - 0.5) / 0.5"
+        scale: 0.00392156862745098
+        mean: [0.5, 0.5, 0.5]
+        std: [0.5, 0.5, 0.5]
+        version: preprocess-rgb-mean05-v1
+      imagenet:
+        formula: "(pixel / 255.0 - mean) / std"
+        scale: 0.00392156862745098
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
+        version: preprocess-rgb-imagenet-v1
+      arcface128:
+        formula: "(pixel - 127.5) / 128.0"
+        scale: 1.0
+        mean: [127.5, 127.5, 127.5]
+        std: [128.0, 128.0, 128.0]
+        version: preprocess-rgb-arcface128-v1
 alignment:
   template: arcface_112x112
   landmarks:

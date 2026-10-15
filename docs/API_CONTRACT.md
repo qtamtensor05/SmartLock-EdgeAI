@@ -1,5 +1,9 @@
 # API contract v1.0
 
+## Preprocessing metadata extension
+
+`PredictionResponse.model` retains `name` and `version` and adds the backward-compatible fields `checkpointSha256`, `preprocessingMode`, `preprocessingVersion`, and `pipelineVersion`. These fields identify the embedding contract without exposing an embedding. No endpoint path, request format, status enum, or access-control rule changed.
+
 ## Quy ước chung
 
 - JSON có `schemaVersion: "1.0"`.

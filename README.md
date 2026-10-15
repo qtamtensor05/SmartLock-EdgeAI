@@ -54,6 +54,7 @@ curl.exe -X DELETE "http://127.0.0.1:8000/persons/user-001" -H "X-Admin-Key: a-l
 .\.venv\Scripts\python.exe scripts\inspect_model.py
 .\.venv\Scripts\python.exe scripts\test_inference.py
 .\.venv\Scripts\python.exe scripts\benchmark.py path\to\one-face.jpg --iterations 10
+.\.venv\Scripts\python.exe scripts\compare_preprocessing.py path\to\permitted-jpegs --output-dir validation_results
 ```
 
 Benchmark chỉ đo latency. Không có ảnh được phép sử dụng theo nhiều danh tính nên FAR/FRR và threshold chưa được hiệu chuẩn. Công thức normalization hiện là giả định cấu hình, không phải contract đã xác minh từ quá trình huấn luyện. Xem [model contract](docs/MODEL_CONTRACT.md), [API contract](docs/API_CONTRACT.md) và [báo cáo giai đoạn 1](docs/PHASE1_REPORT.md).

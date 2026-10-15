@@ -1,5 +1,24 @@
 # Báo cáo Giai đoạn 1 — 2026-10-15
 
+## Phase 1 Acceptance - Preprocessing Verification (2026-10-16)
+
+### Thay đổi và bằng chứng
+
+- Đối chiếu repository `foamliu/MobileFaceNet` tại commit `a6cc9032a659b615f477833e1a70b5e7931bcccc`.
+- Checkpoint nguồn và workspace cùng 7,607,970 byte, SHA-256 `780e31e7c2639a0d5fdebe843f5df3ff81fda79a090164df0ff40514d172853a`.
+- TorchScript thực tế: input `[1,3,112,112]` float32, output `[1,128]` float32 hữu hạn. Graph bắt đầu bằng convolution, không chứa input division/permutation; preprocessing không nằm trong model.
+- Source training/validation dùng ImageNet normalization và RGB. `demo.py` lại chọn mean/std 0.5 và chỉ dùng ArcFace-128-like formula để in so sánh. Không có metadata training-run đủ mạnh để gắn chắc packaged checkpoint với một mode.
+- Source alignment dùng padded square reference khác template Edge AI hiện tại. Template đang dùng không bị thay đổi âm thầm.
+- Bổ sung ba mode/version, pipeline fingerprint, chống trộn database và công cụ so sánh CSV/JSON không ghi ảnh/embedding.
+
+### Kết quả thực nghiệm không nhãn
+
+Trên cùng một crop từ một ảnh mẫu OpenCV: arcface128/current `0.999998`; arcface128/imagenet `0.947641`; current/imagenet `0.948107`. Đây chỉ là cosine chéo mode, không phải accuracy. Không tính FAR/FRR/ROC/TAR và không chọn mode tốt nhất.
+
+### Kết luận nghiệm thu
+
+Trạng thái cuối: **PENDING_VERIFICATION**. Công cụ kỹ thuật và kiểm soát version đã hoàn thiện; mode mặc định vẫn là `current`, `verified_against_training: false`, threshold 0.65 vẫn chưa hiệu chuẩn. Muốn PASS cần bằng chứng preprocessing gắn trực tiếp với checkpoint hoặc dataset có nhãn/đồng thuận với validation và test độc lập theo `PREPROCESSING_VALIDATION.md`.
+
 ## Yêu cầu — Kết quả
 
 - Pipeline độc lập: đã triển khai decoder, YuNet 5 landmarks, alignment, preprocessing cấu hình, MobileFaceNet, matcher 1:N và database.

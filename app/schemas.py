@@ -18,6 +18,10 @@ class PipelineStatus(str, Enum):
 class ModelInfo(BaseModel):
     name: str
     version: str
+    checkpointSha256: str | None = None
+    preprocessingMode: str | None = None
+    preprocessingVersion: str | None = None
+    pipelineVersion: str | None = None
 
 
 class PredictionResponse(BaseModel):

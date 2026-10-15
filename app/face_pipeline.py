@@ -29,10 +29,11 @@ class FacePipeline:
 
     def __init__(self, decoder: JPEGDecoder, detector, preprocessor: FacePreprocessor,
                  embedder: MobileFaceNet, matcher: FaceMatcher, database: FaceDatabase,
-                 low_light_mean_luma: float = 35.0):
+                 low_light_mean_luma: float = 35.0, pipeline_version: str | None = None):
         self.decoder, self.detector, self.preprocessor = decoder, detector, preprocessor
         self.embedder, self.matcher, self.database = embedder, matcher, database
         self.low_light_mean_luma = low_light_mean_luma
+        self.pipeline_version = pipeline_version
 
     def process(self, payload: bytes, include_embedding: bool = False) -> PipelineResult:
         started = time.perf_counter()

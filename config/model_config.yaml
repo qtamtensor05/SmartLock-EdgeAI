@@ -1,0 +1,45 @@
+model:
+  path: models/mobilefacenet_scripted.pt
+  name: MobileFaceNet
+  version: fp32-v1
+  embedding_dim: 128
+  device: cpu
+detector:
+  model_path: models/face_detection_yunet_2023mar.onnx
+  confidence_threshold: 0.80
+  nms_threshold: 0.30
+  top_k: 5000
+input:
+  color_space: RGB
+  width: 112
+  height: 112
+  tensor_layout: NCHW
+  dtype: float32
+  pixel_range: [0, 255]
+  interpolation: linear
+  normalization:
+    formula: "(pixel * scale - mean) / std"
+    scale: 0.00392156862745098
+    mean: [0.5, 0.5, 0.5]
+    std: [0.5, 0.5, 0.5]
+    verified_against_training: false
+alignment:
+  template: arcface_112x112
+  landmarks:
+    - [38.2946, 51.6963]
+    - [73.5318, 51.5014]
+    - [56.0252, 71.7366]
+    - [41.5493, 92.3655]
+    - [70.7299, 92.2041]
+matching:
+  cosine_threshold: 0.65
+  threshold_calibrated: false
+quality:
+  low_light_mean_luma: 35.0
+storage:
+  path: data/faces.json
+  max_samples_per_person: 20
+transport:
+  max_jpeg_bytes: 1048576
+  max_decoded_pixels: 1000000
+  request_timeout_seconds: 10.0

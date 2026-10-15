@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.env
+data/*.json
+data/*.tmp
+benchmark_results.json
+!models/mobilefacenet_scripted.pt
+tmp/

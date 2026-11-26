@@ -7,8 +7,10 @@ Chạy nhận diện trên ESP32-S3.
 Đây là bản thử qua UART, chưa kết nối luồng RFID, OTP hoặc servo.
 
 Trong môi trường ESP-IDF đã thiết lập, vào thư mục này và chạy
-`idf.py build`, sau đó `idf.py -p COM5 flash monitor` để kiểm tra
-`CAMERA status=ESP_OK` và `READY`. Đóng monitor trước khi chạy công cụ PC.
+`idf.py build`, sau đó `idf.py -p COM5 flash`. UART báo thông tin boot
+và camera ở 115200 baud rồi chuyển sang 460800 baud trước dòng `READY`.
+Đóng monitor trước khi chạy công cụ PC. Nếu đang dùng firmware cũ,
+thêm `--baud 115200` vào lệnh Python.
 Nạp bản thử thay ứng dụng đang có trên mạch. Kho mẫu dùng partition NVS
 `face_live`, namespace `mfn_s8_v1`.
 
@@ -32,5 +34,22 @@ mạch, giữ qua reset. Đăng ký lại cùng ID sẽ thay mẫu cũ. ID hợp
 hoặc `UNKNOWN`. Ngưỡng dựa trên probe hiện có, chưa hiệu chỉnh trên ảnh
 camera thật. Thử riêng người đã đăng ký và người lạ trước khi dùng kết quả
 cho quyết định truy cập.
+
+## Xem trước và đăng ký trên web
+
+Từ thư mục gốc SmartLock, đóng Serial Monitor và chạy:
+
+```powershell
+python edge-ai/face-edge/tools/live_camera_web.py --port COM5
+```
+
+Mở [Camera SmartLock](http://127.0.0.1:8092). Trang cập nhật ảnh JPEG liên tục
+qua USB. Nhập ID và bấm **Chụp và đăng ký** khi thấy mặt trong khung.
+ESP32 lấy một frame mới cho lệnh đăng ký và gửi lại đúng JPEG đã dùng để
+suy luận, kể cả khi từ chối. Web hiển thị ảnh này dưới kết quả và lưu tại
+`output/live/enrollment.jpg`. Ảnh preview gần nhất nằm trong `output/live/latest.jpg`
+tính từ thư mục `face-edge` chứa firmware. Embedding nằm trong NVS trên mạch.
+Máy chủ web chỉ lắng nghe ở địa chỉ loopback. Dừng bằng Ctrl+C khi chạy
+từ terminal.
 
 Driver camera được ghim theo [ESP Component Registry](https://components.espressif.com/components/espressif/esp32-camera/versions/2.1.4/readme).

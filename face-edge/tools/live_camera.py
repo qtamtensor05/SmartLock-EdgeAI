@@ -11,13 +11,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("capture", "enroll", "identify", "list", "delete"))
     parser.add_argument("--port", default="COM5")
+    parser.add_argument("--baud", type=int, choices=(115200, 460800), default=460800)
     parser.add_argument("--id", type=int, choices=range(1, 33), metavar="1..32")
     parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parents[1] / "output/live/latest.jpg")
     args = parser.parse_args()
     if (args.action in ("enroll", "delete")) != (args.id is not None):
         parser.error("--id is required only for enroll and delete")
 
-    port = serial.Serial(baudrate=115200, timeout=0.25, write_timeout=2)
+    port = serial.Serial(baudrate=args.baud, timeout=0.25, write_timeout=2)
     port.port = args.port
     port.dtr = False
     port.rts = False

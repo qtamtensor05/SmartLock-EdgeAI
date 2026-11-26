@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include "dl_image_jpeg.hpp"
+#include "driver/uart.h"
 #include "esp_camera.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -70,10 +71,15 @@ void export_jpeg(const camera_fb_t &frame)
 }
 
 void process_frame(nvs_handle_t store, HumanFaceDetect &detector, HumanFaceFeat &model,
-                   bool capture_only, unsigned enroll_id)
+                   bool capture_only, unsigned enroll_id, bool report_frame = false)
 {
     const int64_t started = esp_timer_get_time();
     auto *frame = esp_camera_fb_get();
+    if (frame && !capture_only) {
+        // With a single framebuffer, the first JPEG may predate the command.
+        esp_camera_fb_return(frame);
+        frame = esp_camera_fb_get();
+    }
     if (!frame) {
         puts("ERR camera_capture");
         return;
@@ -84,6 +90,9 @@ void process_frame(nvs_handle_t store, HumanFaceDetect &detector, HumanFaceFeat 
         return;
     }
     auto image = dl::image::sw_decode_jpeg({frame->buf, frame->len}, dl::image::DL_IMAGE_PIX_TYPE_RGB888);
+    if (report_frame) {
+        export_jpeg(*frame);
+    }
     esp_camera_fb_return(frame);
     if (!image.data) {
         puts("ERR jpeg_decode");
@@ -157,6 +166,10 @@ extern "C" void app_main()
     }
     HumanFaceDetect detector;
     HumanFaceFeat model(HumanFaceFeat::MFN_S8_V1);
+    // Leave the boot log at 115200 and switch the application console for JPEG transfer.
+    fflush(stdout);
+    ESP_ERROR_CHECK(uart_wait_tx_idle_polling(UART_NUM_0));
+    ESP_ERROR_CHECK(uart_set_baudrate(UART_NUM_0, 460800));
     puts("READY: capture | enroll ID | identify | list | delete ID (ID 1..32)");
     std::string command;
     bool overflow = false;
@@ -189,6 +202,8 @@ extern "C" void app_main()
                 }
             }
             puts("LIST_END");
+        } else if (sscanf(command.c_str(), "enroll-frame %u %c", &id, &tail) == 1 && id && id <= max_people) {
+            process_frame(store, detector, model, false, id, true);
         } else if (sscanf(command.c_str(), "enroll %u %c", &id, &tail) == 1 && id && id <= max_people) {
             process_frame(store, detector, model, false, id);
         } else if (sscanf(command.c_str(), "delete %u %c", &id, &tail) == 1 && id && id <= max_people) {

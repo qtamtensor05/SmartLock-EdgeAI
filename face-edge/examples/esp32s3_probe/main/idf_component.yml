@@ -1,0 +1,5 @@
+dependencies:
+  idf: "==5.5.2"
+  espressif/esp-dl: "==3.3.14"
+  espressif/human_face_detect: "==0.5.2"
+  espressif/human_face_recognition: "==0.3.3"

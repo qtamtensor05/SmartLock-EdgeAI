@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+option(FACE_PROBE_FIXTURE_COMPAT "Use upstream largest-face behavior on fixed JPEG fixtures only" OFF)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+idf_build_set_property(MINIMAL_BUILD ON)
+project(face_edge_probe)

@@ -1,0 +1,8 @@
+{
+  "release": "esp-develop-9.2.2-20261109",
+  "platform": "win64",
+  "url": "https://github.com/espressif/qemu/releases/download/esp-develop-9.2.2-20261109/qemu-xtensa-softmmu-esp_develop_9.2.2_20261109-x86_64-w64-mingw32.tar.xz",
+  "bytes": 36362200,
+  "sha256": "1ffa852b5f80ac6d51cdfac463658323c27a22b94c0d7e74b58065b00b2bf25f",
+  "install_dir": "qemu-20261109"
+}

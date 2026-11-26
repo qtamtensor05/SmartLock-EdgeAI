@@ -1,0 +1,12 @@
+__pycache__/
+/output/
+/.tools/
+/examples/esp32s3_live/build/
+/examples/esp32s3_live/managed_components/
+/examples/esp32s3_live/sdkconfig
+/examples/esp32s3_live/sdkconfig.old
+/examples/esp32s3_probe/build/
+/examples/esp32s3_probe/managed_components/
+/examples/esp32s3_probe/sdkconfig
+/examples/esp32s3_probe/sdkconfig.old
+/examples/esp32s3_probe/main/fixtures/*.jpg

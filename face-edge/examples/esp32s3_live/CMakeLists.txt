@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+set(SDKCONFIG_DEFAULTS "../esp32s3_probe/sdkconfig.defaults")
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+idf_build_set_property(MINIMAL_BUILD ON)
+project(face_edge_live)

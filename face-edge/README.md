@@ -1,61 +1,16 @@
 # Face edge — AI khuôn mặt chạy trên ESP32-S3
 
-Repo này là submodule `edge-ai/` của SmartLock.
+Chứa component ESP-IDF [`components/face_auth`](components/face_auth/README.md) mà
+firmware khóa SmartLock link vào (luồng thẻ → mặt → OTP). Component dùng model int8
+của Espressif, tải theo phiên bản ghim trong `dependencies.lock` của SmartLock:
 
-| Thư mục | Vai trò |
-| --- | --- |
-| `components/face_auth` | **Component được firmware khóa SmartLock link vào** (luồng thẻ → mặt → OTP). Xem [README](components/face_auth/README.md). |
-| `examples/esp32s3_live` | Firmware thử độc lập qua UART + `tools/live_camera*.py`; nạp sẽ thay firmware khóa. |
-| `examples/esp32s3_probe` | Bản thử ảnh nhúng cố định, chạy QEMU/mạch thật. |
-| `simulate.py` | Mô phỏng logic đối sánh trên PC bằng vector nhân tạo. |
+| Model | Việc | Component |
+| --- | --- | --- |
+| `human_face_detect_msr_s8_v1` + `..._mnp_s8_v1` (MSRMNP) | Tìm mặt + 5 điểm mốc | `espressif/human_face_detect` 0.5.2 |
+| `human_face_feat_mfn_s8_v1` (MobileFaceNet) | Tạo embedding khuôn mặt | `espressif/human_face_recognition` 0.3.3 |
 
-## Chạy trên máy tính
-
-Từ repository SmartLock, dùng Python 3 (không cần cài thư viện):
-
-```powershell
-python face-edge/simulate.py
-```
-
-Kết quả: `output/report.json`, gồm cấu hình đọc trực tiếp từ dự án và các kịch
-bản đối sánh 1:N bằng vector nhân tạo. Chương trình không lấy ảnh, không nhận
-diện mặt thật, không điều khiển khóa và không mô phỏng CPU ESP32. Ngưỡng 0.8 và
-khoảng cách 0.05 chỉ minh họa logic, không dùng làm ngưỡng mở khóa thực tế.
-
-## Những gì lấy được từ dự án
-
-- Board, framework, flash khai báo, loại PSRAM, baud serial: `platformio.ini`.
-- GPIO và xung đột chân: `src/config/PinConfig.h`.
-- Định dạng và chế độ frame camera: `src/camera/CameraService.cpp`.
-- Chu kỳ preview dự kiến: `src/main.cpp`; đây không phải FPS đo được.
-- Tham số OTP: `src/config/AppConfig.h`.
-- Linh kiện sơ đồ giả lập: `diagram.json`.
-
-Dung lượng PSRAM thực, heap còn trống, độ trễ suy luận, FPS thực, chất lượng
-nhận diện và điện năng chưa xác định. Flash 16 MB là cấu hình, chưa phải số đo.
-Không tự suy ra board có PSRAM 8 MB chỉ từ loại OPI hay cờ BOARD_HAS_PSRAM.
-
-## Phạm vi thử không cần board
-
-Xem [hướng dẫn build ESP32-S3 dùng JPEG cố định](examples/esp32s3_probe/README.md)
-cho bộ phiên bản, lệnh chuẩn bị/build và giới hạn của số liệu.
-
-Đã có [runner QEMU và báo cáo thực thi](examples/esp32s3_probe/QEMU.md).
-Chạy `python face-edge/tools/setup_qemu.py` rồi
-`python face-edge/tools/run_qemu.py` từ SmartLock-EdgeAI root khi đã có binary.
-Model chạy thật trên emulator, nhưng hiện kiểm tra nhận diện chưa đạt.
-
-1. Bộ thử hiện tại: đăng ký/xóa mẫu và phân loại known/unknown/no-face/nhiều
-   mặt/ảnh kém/vector lỗi. Các trạng thái camera là input giả lập.
-2. Bước tiếp: chọn, ghim phiên bản ESP-IDF/ESP-DL/model; build chương trình
-   probe ESP32-S3 dùng ảnh JPEG cố định nhúng trong firmware, thay nguồn OV2640.
-   Kiểm tra compile/link, dung lượng image và phần RAM tĩnh từ ELF/map nếu có
-   toolchain. Những số này không bao gồm toàn bộ RAM động của suy luận.
-3. Wokwi có thể thử GPIO/state machine bằng nguồn frame hoặc kết quả giả;
-   không mặc định hỗ trợ OV2640 hay mọi toán tử model. Chỉ công bố đã chạy
-   model trên simulator khi đã kiểm tra thực sự.
-4. Khi có board: chạy cùng model/ảnh cố định để đo latency/bộ nhớ, sau đó thay
-   bằng camera thật và đánh giá nhận diện với người đã đăng ký/người lạ.
+Model được đóng gói vào flash rodata của firmware khi build; không có file model nào
+trong repo này.
 
 ## Tích hợp trong SmartLock
 
@@ -79,11 +34,29 @@ ngược, firmware lật 180°) và thấy trọn đầu ở khoảng 40–60 cm
 khi build chung với component khác cũng đăng ký danh sách (ESP-SR qua Arduino), nếu
 không ESP-DL bỏ `Concat` và model báo `Do not support Concat`.
 
-Mẫu đã đăng ký bằng firmware thử cũ (namespace `mfn_s8_v1`, khóa theo ID số)
-không dùng cho khóa; cần đăng ký lại theo thẻ.
+Thử trên bàn không cần server: `tools/bench_server.py` của SmartLock (trang xem trước
+camera, nút chụp, OTP giả lập).
+
+## Phần thử nghiệm đã gỡ
+
+Các phần dưới đây phục vụ giai đoạn thử nghiệm và không còn được firmware dùng; đã
+gỡ khỏi nhánh chính, vẫn lấy lại được từ tag `archive/phase1-experiments` (commit
+`f700282`):
+
+- Dịch vụ Python trên PC (`app/`, `tests/`, `scripts/`, `config/`, `docs/`): FastAPI
+  + YuNet + MobileFaceNet FP32 (`models/mobilefacenet_scripted.pt`).
+- `examples/esp32s3_probe` + `tools/*qemu*`, `tools/probe.py`: thử model trên ảnh
+  nhúng cố định và QEMU.
+- `examples/esp32s3_live` + `tools/live_camera*.py`: firmware UART độc lập để đăng ký/
+  nhận diện thử; thay bằng firmware khóa + `tools/bench_server.py`.
+- `simulate.py`: mô phỏng đối sánh bằng vector nhân tạo.
+
+```powershell
+git show archive/phase1-experiments:face-edge/README.md
+git checkout archive/phase1-experiments -- face-edge/examples/esp32s3_live
+```
 
 ## Tài liệu
 
-- https://docs.wokwi.com/guides/esp32
-- https://docs.wokwi.com/getting-started/supported-hardware
 - https://github.com/espressif/esp-who
+- https://github.com/espressif/esp-dl

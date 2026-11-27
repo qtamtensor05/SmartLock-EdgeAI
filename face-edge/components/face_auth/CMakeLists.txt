@@ -1,7 +1,7 @@
 idf_component_register(SRCS "face_auth.cpp"
                        INCLUDE_DIRS "include"
                        REQUIRES nvs_flash
-                       PRIV_REQUIRES human_face_detect human_face_recognition esp-dl)
+                       PRIV_REQUIRES human_face_detect human_face_recognition esp-dl esp_timer)
 
 # Ask ESP-DL to compile the ops/kernels the face models use. Without this, any other
 # component that registers its own list (ESP-SR via Arduino) strips them out.

@@ -63,6 +63,8 @@ struct Inspection {
     int box[4];       // x1, y1, x2, y2 of the face (valid when faces == 1)
     float brightness; // valid when faces == 1
     float sharpness;  // valid when faces == 1
+    uint32_t decode_ms;
+    uint32_t detect_ms;
 };
 
 // Detects one face in a JPEG frame, computes its MFN embedding and compares it

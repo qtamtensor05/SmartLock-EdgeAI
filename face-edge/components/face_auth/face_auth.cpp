@@ -9,6 +9,7 @@
 #include "dl_image_jpeg.hpp"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "human_face_detect.hpp"
 #include "human_face_recognition.hpp"
 #include "nvs_flash.h"
@@ -160,16 +161,20 @@ void FaceAuth::drop_inspected()
 Inspection FaceAuth::inspect(const uint8_t *jpeg, size_t len, const QualityLimits &limits)
 {
     drop_inspected();
-    Inspection out{Quality::DecodeError, 0, {0, 0, 0, 0}, 0.0f, 0.0f};
+    Inspection out{Quality::DecodeError, 0, {0, 0, 0, 0}, 0.0f, 0.0f, 0, 0};
     if (!ready() || !jpeg || !len) {
         return out;
     }
+    const int64_t t0 = esp_timer_get_time();
     auto image = dl::image::sw_decode_jpeg({const_cast<uint8_t *>(jpeg), len},
                                            dl::image::DL_IMAGE_PIX_TYPE_RGB888);
+    const int64_t t1 = esp_timer_get_time();
+    out.decode_ms = static_cast<uint32_t>((t1 - t0) / 1000);
     if (!image.data) {
         return out;
     }
     const auto &faces = detector_->run(image);
+    out.detect_ms = static_cast<uint32_t>((esp_timer_get_time() - t1) / 1000);
     out.faces = faces.size();
     if (out.faces != 1 || faces.front().keypoint.size() != 10 || faces.front().box.size() != 4) {
         out.quality = out.faces > 1 ? Quality::MultipleFaces : Quality::NoFace;

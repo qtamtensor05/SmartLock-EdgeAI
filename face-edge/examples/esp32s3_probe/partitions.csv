@@ -1,6 +1,0 @@
-# Probe-only image. Does not share production card/template storage.
-# Name,       Type, SubType, Offset,  Size
-nvs,          data, nvs,     0x9000,  0x6000
-phy_init,     data, phy,     0xf000,  0x1000
-factory,      app,  factory, 0x10000, 0xc00000
-face_probe_fs,data, spiffs,  0xc10000,0x100000

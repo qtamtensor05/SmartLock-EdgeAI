@@ -4,24 +4,27 @@ Bản firmware ESP-IDF 5.5.2 dùng chân camera từ SmartLock, JPEG 320×240,
 detector MSRMNP và MFN int8. Driver tự nhận cảm biến. Mạch thử COM5 ghi
 log OV3660 khi khởi tạo, dù cấu hình dự án trước đây mô tả OV2640.
 Chạy nhận diện trên ESP32-S3.
-Đây là bản thử qua UART, chưa kết nối luồng RFID, OTP hoặc servo.
+Đây là công cụ thử độc lập qua UART. Firmware khóa SmartLock đã tích hợp
+nhận diện (luồng thẻ → mặt → OTP) qua cùng component `components/face_auth`;
+nạp bản thử này sẽ thay firmware khóa trên mạch.
 
 Trong môi trường ESP-IDF đã thiết lập, vào thư mục này và chạy
 `idf.py build`, sau đó `idf.py -p COM5 flash`. UART báo thông tin boot
 và camera ở 115200 baud rồi chuyển sang 460800 baud trước dòng `READY`.
 Đóng monitor trước khi chạy công cụ PC. Nếu đang dùng firmware cũ,
 thêm `--baud 115200` vào lệnh Python.
-Nạp bản thử thay ứng dụng đang có trên mạch. Kho mẫu dùng partition NVS
-`face_live`, namespace `mfn_s8_v1`.
+Kho mẫu dùng partition NVS `face_live`, namespace `mfn_s8_id1` (tách khỏi
+namespace `mfn_s8_uid1` của khóa). Mẫu tạo bằng bản cũ (`mfn_s8_v1`) không
+còn được đọc; đăng ký lại ID.
 
 Từ thư mục SmartLock, chạy với Python có PySerial:
 
 ```powershell
-python face-edge/tools/live_camera.py capture
-python face-edge/tools/live_camera.py enroll --id 1
-python face-edge/tools/live_camera.py list
-python face-edge/tools/live_camera.py identify
-python face-edge/tools/live_camera.py delete --id 1
+python edge-ai/face-edge/tools/live_camera.py capture
+python edge-ai/face-edge/tools/live_camera.py enroll --id 1
+python edge-ai/face-edge/tools/live_camera.py list
+python edge-ai/face-edge/tools/live_camera.py identify
+python edge-ai/face-edge/tools/live_camera.py delete --id 1
 ```
 
 `capture` lưu ảnh vào `face-edge/output/live/latest.jpg`. Chỉ định

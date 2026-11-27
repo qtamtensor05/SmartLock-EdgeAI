@@ -1,0 +1,55 @@
+# Ops/kernels the face models need, registered with esp_dl_compile_add_yml() in
+# CMakeLists.txt. ESP-DL compiles only the union of all registered req files; once
+# another component registers one (Arduino-ESP32 pulls in ESP-SR, which does), any op
+# missing here is dropped and dl::Model fails with "Do not support <Op>" at load time.
+#
+# ops: op_type names found in human_face_detect_msr_s8_v1, human_face_detect_mnp_s8_v1
+#      and human_face_feat_mfn_s8_v1 (esp32s3 .espdl files, esp-dl 3.3.14).
+# kernels: every s8 Conv kernel for esp32s3 (dl_tie728_*) plus the C ones (dl_c_*) from spec/kernels.yml,
+#      so no Conv shape of these models loses its kernel. Re-check after changing models.
+kernel_abi: 1
+
+ops:
+  - Add
+  - Concat
+  - Conv
+  - PRelu
+  - Relu
+
+kernels:
+  - dl_c_s8_conv2d_11cn
+  - dl_c_s8_conv2d_33cn
+  - dl_c_s8_conv2d_hwcn
+  - dl_c_s8_depthwise_conv2d_33c1
+  - dl_c_s8_depthwise_conv2d_hwc1
+  - dl_c_s8_dw_tail_bias_per_ch_prelu
+  - dl_c_s8_tail_bias_linear
+  - dl_c_s8_tail_bias_per_ch_leakyrelu
+  - dl_c_s8_tail_bias_per_ch_linear
+  - dl_c_s8_tail_bias_per_ch_prelu
+  - dl_c_s8_tail_bias_per_ch_relu
+  - dl_c_s8_tail_bias_relu
+  - dl_c_s8_tail_leakyrelu
+  - dl_c_s8_tail_linear
+  - dl_c_s8_tail_prelu
+  - dl_c_s8_tail_relu
+  - dl_tie728_s8_conv2d_11cn
+  - dl_tie728_s8_conv2d_11cn_prelu
+  - dl_tie728_s8_conv2d_11cn_relu
+  - dl_tie728_s8_conv2d_33cn
+  - dl_tie728_s8_conv2d_33cn_prelu
+  - dl_tie728_s8_conv2d_33cn_relu
+  - dl_tie728_s8_conv2d_hwcn
+  - dl_tie728_s8_conv2d_hwcn_prelu
+  - dl_tie728_s8_conv2d_hwcn_relu
+  - dl_tie728_s8_depthwise_conv2d_33c1
+  - dl_tie728_s8_depthwise_conv2d_33c1_prelu
+  - dl_tie728_s8_depthwise_conv2d_33c1_relu
+  - dl_tie728_s8_depthwise_conv2d_hwc1
+  - dl_tie728_s8_depthwise_conv2d_hwc1_prelu
+  - dl_tie728_s8_depthwise_conv2d_hwc1_relu
+  - dl_tie728_s8_unaligned_conv2d_11cn
+  - dl_tie728_s8_unaligned_conv2d_33cn
+  - dl_tie728_s8_unaligned_conv2d_hwcn
+  - dl_tie728_s8_unaligned_depthwise_conv2d_33c1
+  - dl_tie728_s8_unaligned_depthwise_conv2d_hwc1

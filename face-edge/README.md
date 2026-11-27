@@ -1,8 +1,13 @@
-# Face edge — thử nghiệm khi chưa có mạch
+# Face edge — AI khuôn mặt chạy trên ESP32-S3
 
-Thư mục chuẩn bị tách thành repository/submodule riêng. Hiện là thư mục bình
-thường trong SmartLock; chưa phải Git submodule. Có bản thử ESP-IDF/model thật
-độc lập trong `examples/esp32s3_probe`; chưa tích hợp vào firmware khóa.
+Repo này là submodule `edge-ai/` của SmartLock.
+
+| Thư mục | Vai trò |
+| --- | --- |
+| `components/face_auth` | **Component được firmware khóa SmartLock link vào** (luồng thẻ → mặt → OTP). Xem [README](components/face_auth/README.md). |
+| `examples/esp32s3_live` | Firmware thử độc lập qua UART + `tools/live_camera*.py`; nạp sẽ thay firmware khóa. |
+| `examples/esp32s3_probe` | Bản thử ảnh nhúng cố định, chạy QEMU/mạch thật. |
+| `simulate.py` | Mô phỏng logic đối sánh trên PC bằng vector nhân tạo. |
 
 ## Chạy trên máy tính
 
@@ -52,25 +57,30 @@ Model chạy thật trên emulator, nhưng hiện kiểm tra nhận diện chưa
 4. Khi có board: chạy cùng model/ảnh cố định để đo latency/bộ nhớ, sau đó thay
    bằng camera thật và đánh giá nhận diện với người đã đăng ký/người lạ.
 
-## Thiết kế tích hợp dự kiến
+## Tích hợp trong SmartLock
 
-Firmware sở hữu camera/framebuffer. Module nhận view ảnh có format, kích
-thước, frame ID và thời hạn sống; xử lý xong mới trả framebuffer. Module trả
-person_id/status/similarity/model_version, không gọi servo. LockController
-quyết định quyền truy cập. Chế độ mock phải tách build và không được phép mở
-khóa vật lý. Kho embedding phải lưu model/schema version; đổi model cần kiểm
-tra tương thích hoặc đăng ký lại. Đăng ký/xóa phải có phiên quản trị hợp lệ.
+Firmware khóa (ESP-IDF 5.5.2 + Arduino component) sở hữu camera và gọi
+`face_auth` qua `src/face/FaceService.cpp`:
 
-Chưa đổi firmware vì cần giải quyết GPIO 0 dùng chung keypad/servo, kiểm chứng
-cách ghép hệ build IDF/Arduino và làm mới impact graph trước khi tích hợp. Không tự chọn GPIO
-thay thế khi chưa xác nhận sơ đồ phần cứng mục tiêu.
+1. Thẻ hợp lệ theo server → `FaceVerifyState`: camera stream xem trước, người dùng
+   chụp bằng `#` hoặc nút web; khung đó được so 1:1 với các mẫu đã đăng ký cho UID
+   thẻ. Đúng → bước OTP; không có mẫu, nhiều mặt, 3 lần không khớp, lỗi model hoặc
+   hết thời gian → từ chối (fail closed).
+2. Đăng ký (mật khẩu master → OTP → quẹt thẻ) → `FaceEnrollState` lưu 3 mẫu
+   (nhìn thẳng, hơi trái, hơi phải) vào phân vùng `face_live`, namespace `mfn_s8_uid1`.
+3. Component chỉ trả trạng thái và điểm; `LockController` quyết định mở khóa.
 
-## Chuyển thành submodule thật
+Đã kiểm chứng trên mạch thật (2026-11-27): đăng ký 3 mẫu, rồi thẻ → mặt (điểm
+0,81–0,86, khoảng 0,6–0,7 s mỗi lần) → OTP → mở khóa; thẻ chưa đăng ký mặt bị từ chối.
+Hai điều kiện để detector thấy mặt: ảnh phải đúng chiều (camera trên mạch thử lắp
+ngược, firmware lật 180°) và thấy trọn đầu ở khoảng 40–60 cm.
 
-Khi có repository riêng: đưa nội dung này sang repository đó và commit/push;
-sau đó thay thư mục hiện tại bằng gitlink tại cùng đường dẫn, ghim commit.
-Không chạy `git init` lồng trong thư mục rồi coi đó là submodule. Repository
-chính phải ghi `.gitmodules` và gitlink, tương tự `admin-module` hiện có.
+`face_models.compile_req.yml` khai báo toán tử/kernel model cần với ESP-DL. Bắt buộc
+khi build chung với component khác cũng đăng ký danh sách (ESP-SR qua Arduino), nếu
+không ESP-DL bỏ `Concat` và model báo `Do not support Concat`.
+
+Mẫu đã đăng ký bằng firmware thử cũ (namespace `mfn_s8_v1`, khóa theo ID số)
+không dùng cho khóa; cần đăng ký lại theo thẻ.
 
 ## Tài liệu
 

@@ -1,5 +1,6 @@
 #include "face_auth.hpp"
 
+#include <algorithm>
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
@@ -37,6 +38,47 @@ float dot(const float *a, const float *b, size_t n)
     }
     return sum;
 }
+
+dl::image::img_t as_dl_image(void *data, uint16_t width, uint16_t height)
+{
+    dl::image::img_t image{};
+    image.data = data;
+    image.width = width;
+    image.height = height;
+    image.pix_type = dl::image::DL_IMAGE_PIX_TYPE_RGB888;
+    return image;
+}
+
+// Mean luma and variance of the 4-neighbour Laplacian inside box (RGB888).
+void measure(const uint8_t *rgb, int width, const int (&box)[4], float *brightness, float *sharpness)
+{
+    auto luma = [&](int x, int y) {
+        const uint8_t *p = rgb + (static_cast<size_t>(y) * width + x) * 3;
+        return (77 * p[0] + 150 * p[1] + 29 * p[2]) >> 8;
+    };
+    double sum = 0, lap_sum = 0, lap_sq = 0;
+    size_t n = 0, m = 0;
+    for (int y = box[1]; y <= box[3]; ++y) {
+        for (int x = box[0]; x <= box[2]; ++x) {
+            const int l = luma(x, y);
+            sum += l;
+            ++n;
+            if (x > box[0] && x < box[2] && y > box[1] && y < box[3]) {
+                const int lap = 4 * l - luma(x - 1, y) - luma(x + 1, y) - luma(x, y - 1) - luma(x, y + 1);
+                lap_sum += lap;
+                lap_sq += static_cast<double>(lap) * lap;
+                ++m;
+            }
+        }
+    }
+    *brightness = n ? static_cast<float>(sum / n) : 0.0f;
+    if (m) {
+        const double mean = lap_sum / m;
+        *sharpness = static_cast<float>(lap_sq / m - mean * mean);
+    } else {
+        *sharpness = 0.0f;
+    }
+}
 } // namespace
 
 const char *to_string(Status status)
@@ -53,8 +95,26 @@ const char *to_string(Status status)
     return "ERROR";
 }
 
+const char *to_string(Quality quality)
+{
+    switch (quality) {
+    case Quality::Ok: return "OK";
+    case Quality::DecodeError: return "DECODE_ERROR";
+    case Quality::NoFace: return "NO_FACE";
+    case Quality::MultipleFaces: return "MULTIPLE_FACES";
+    case Quality::TooSmall: return "TOO_SMALL";
+    case Quality::TooLarge: return "TOO_LARGE";
+    case Quality::OffCenter: return "OFF_CENTER";
+    case Quality::TooDark: return "TOO_DARK";
+    case Quality::TooBright: return "TOO_BRIGHT";
+    case Quality::Blurry: return "BLURRY";
+    }
+    return "ERROR";
+}
+
 FaceAuth::~FaceAuth()
 {
+    drop_inspected();
     delete detector_;
     delete model_;
     if (store_open_) {
@@ -88,6 +148,96 @@ esp_err_t FaceAuth::begin(const char *partition, const char *ns)
     return ESP_OK;
 }
 
+void FaceAuth::drop_inspected()
+{
+    if (cached_.data) {
+        heap_caps_free(cached_.data);
+    }
+    cached_ = Image{};
+    cached_keypoint_.clear();
+}
+
+Inspection FaceAuth::inspect(const uint8_t *jpeg, size_t len, const QualityLimits &limits)
+{
+    drop_inspected();
+    Inspection out{Quality::DecodeError, 0, {0, 0, 0, 0}, 0.0f, 0.0f};
+    if (!ready() || !jpeg || !len) {
+        return out;
+    }
+    auto image = dl::image::sw_decode_jpeg({const_cast<uint8_t *>(jpeg), len},
+                                           dl::image::DL_IMAGE_PIX_TYPE_RGB888);
+    if (!image.data) {
+        return out;
+    }
+    const auto &faces = detector_->run(image);
+    out.faces = faces.size();
+    if (out.faces != 1 || faces.front().keypoint.size() != 10 || faces.front().box.size() != 4) {
+        out.quality = out.faces > 1 ? Quality::MultipleFaces : Quality::NoFace;
+        heap_caps_free(image.data);
+        return out;
+    }
+
+    const auto &face = faces.front();
+    const int w = image.width, h = image.height;
+    for (int i = 0; i < 4; ++i) {
+        out.box[i] = std::clamp(face.box[i], 0, (i % 2 ? h : w) - 1);
+    }
+    measure(static_cast<const uint8_t *>(image.data), w, out.box, &out.brightness, &out.sharpness);
+
+    const int face_w = out.box[2] - out.box[0];
+    const float cx = (out.box[0] + out.box[2]) * 0.5f / w - 0.5f;
+    const float cy = (out.box[1] + out.box[3]) * 0.5f / h - 0.5f;
+    const bool touches_edge = out.box[0] < limits.edge_margin_px || out.box[1] < limits.edge_margin_px ||
+                              out.box[2] > w - 1 - limits.edge_margin_px || out.box[3] > h - 1 - limits.edge_margin_px;
+
+    if (face_w < limits.min_face_px) {
+        out.quality = Quality::TooSmall;
+    } else if (face_w > limits.max_face_px) {
+        out.quality = Quality::TooLarge;
+    } else if (touches_edge || std::fabs(cx) > limits.max_center_offset || std::fabs(cy) > limits.max_center_offset) {
+        out.quality = Quality::OffCenter;
+    } else if (out.brightness < limits.min_brightness) {
+        out.quality = Quality::TooDark;
+    } else if (out.brightness > limits.max_brightness) {
+        out.quality = Quality::TooBright;
+    } else if (out.sharpness < limits.min_sharpness) {
+        out.quality = Quality::Blurry;
+    } else {
+        out.quality = Quality::Ok;
+    }
+
+    if (out.quality == Quality::Ok) {
+        cached_.data = image.data; // kept for enroll_inspected()/verify_inspected()
+        cached_.width = image.width;
+        cached_.height = image.height;
+        cached_keypoint_ = face.keypoint;
+    } else {
+        heap_caps_free(image.data);
+    }
+    return out;
+}
+
+Result FaceAuth::embed_image(const Image &image, const std::vector<int> &keypoint, unsigned faces,
+                             const float **embedding)
+{
+    *embedding = nullptr;
+    auto dl_image = as_dl_image(image.data, image.width, image.height);
+    const auto *tensor = model_->run(dl_image, keypoint);
+    if (!tensor || tensor->dtype != dl::DATA_TYPE_FLOAT || !tensor->data || tensor->size <= 0 ||
+        static_cast<size_t>(tensor->size) > kMaxDims) {
+        return {Status::Error, 0.0f, faces};
+    }
+    const auto *values = static_cast<const float *>(tensor->data);
+    for (int i = 0; i < tensor->size; ++i) {
+        if (!std::isfinite(values[i])) {
+            return {Status::Error, 0.0f, faces};
+        }
+    }
+    dims_ = tensor->size;
+    *embedding = values; // owned by the model, valid until its next run
+    return {Status::Match, 0.0f, faces};
+}
+
 Result FaceAuth::embed(const uint8_t *jpeg, size_t len, const float **embedding)
 {
     *embedding = nullptr;
@@ -109,21 +259,10 @@ Result FaceAuth::embed(const uint8_t *jpeg, size_t len, const float **embedding)
         heap_caps_free(image.data);
         return {Status::NoFace, 0.0f, count};
     }
-    const auto *tensor = model_->run(image, faces.front().keypoint);
+    const Image owned{image.data, image.width, image.height};
+    const Result result = embed_image(owned, faces.front().keypoint, count, embedding);
     heap_caps_free(image.data);
-    if (!tensor || tensor->dtype != dl::DATA_TYPE_FLOAT || !tensor->data || tensor->size <= 0 ||
-        static_cast<size_t>(tensor->size) > kMaxDims) {
-        return {Status::Error, 0.0f, count};
-    }
-    const auto *values = static_cast<const float *>(tensor->data);
-    for (int i = 0; i < tensor->size; ++i) {
-        if (!std::isfinite(values[i])) {
-            return {Status::Error, 0.0f, count};
-        }
-    }
-    dims_ = tensor->size;
-    *embedding = values; // owned by the model, valid until its next run
-    return {Status::Match, 0.0f, count};
+    return result;
 }
 
 float FaceAuth::best_score(const char *subject, const float *embedding, unsigned *found)
@@ -147,16 +286,8 @@ float FaceAuth::best_score(const char *subject, const float *embedding, unsigned
     return best;
 }
 
-Result FaceAuth::enroll(const uint8_t *jpeg, size_t len, const char *subject, unsigned sample)
+Result FaceAuth::store_sample(const char *subject, unsigned sample, const float *embedding, unsigned faces)
 {
-    if (!subject || !*subject || sample >= kMaxSamples) {
-        return {Status::Error, 0.0f, 0};
-    }
-    const float *embedding = nullptr;
-    const Result result = embed(jpeg, len, &embedding);
-    if (!embedding) {
-        return result;
-    }
     char key[16];
     make_key(subject, sample, key);
     esp_err_t err = nvs_set_blob(store_, key, embedding, dims_ * sizeof(float));
@@ -165,9 +296,55 @@ Result FaceAuth::enroll(const uint8_t *jpeg, size_t len, const char *subject, un
     }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "store %s: %s", key, esp_err_to_name(err));
-        return {Status::Error, 0.0f, result.faces};
+        return {Status::Error, 0.0f, faces};
     }
-    return {Status::Match, 1.0f, result.faces};
+    return {Status::Match, 1.0f, faces};
+}
+
+Result FaceAuth::compare(const char *subject, float threshold, const float *embedding, unsigned faces)
+{
+    unsigned found = 0;
+    const float score = best_score(subject, embedding, &found);
+    if (!found) {
+        return {Status::NotEnrolled, 0.0f, faces};
+    }
+    return {score > threshold ? Status::Match : Status::NoMatch, score, faces};
+}
+
+Result FaceAuth::enroll_inspected(const char *subject, unsigned sample)
+{
+    if (!subject || !*subject || sample >= kMaxSamples || !has_inspected()) {
+        return {Status::Error, 0.0f, 0};
+    }
+    const float *embedding = nullptr;
+    const Result result = embed_image(cached_, cached_keypoint_, 1, &embedding);
+    drop_inspected();
+    return embedding ? store_sample(subject, sample, embedding, 1) : result;
+}
+
+Result FaceAuth::verify_inspected(const char *subject, float threshold)
+{
+    if (!subject || !*subject || !has_inspected()) {
+        return {Status::Error, 0.0f, 0};
+    }
+    if (sample_count(subject) == 0) {
+        drop_inspected();
+        return {Status::NotEnrolled, 0.0f, 1};
+    }
+    const float *embedding = nullptr;
+    const Result result = embed_image(cached_, cached_keypoint_, 1, &embedding);
+    drop_inspected();
+    return embedding ? compare(subject, threshold, embedding, 1) : result;
+}
+
+Result FaceAuth::enroll(const uint8_t *jpeg, size_t len, const char *subject, unsigned sample)
+{
+    if (!subject || !*subject || sample >= kMaxSamples) {
+        return {Status::Error, 0.0f, 0};
+    }
+    const float *embedding = nullptr;
+    const Result result = embed(jpeg, len, &embedding);
+    return embedding ? store_sample(subject, sample, embedding, result.faces) : result;
 }
 
 Result FaceAuth::verify(const uint8_t *jpeg, size_t len, const char *subject, float threshold)
@@ -180,15 +357,7 @@ Result FaceAuth::verify(const uint8_t *jpeg, size_t len, const char *subject, fl
     }
     const float *embedding = nullptr;
     const Result result = embed(jpeg, len, &embedding);
-    if (!embedding) {
-        return result;
-    }
-    unsigned found = 0;
-    const float score = best_score(subject, embedding, &found);
-    if (!found) {
-        return {Status::NotEnrolled, 0.0f, result.faces};
-    }
-    return {score > threshold ? Status::Match : Status::NoMatch, score, result.faces};
+    return embedding ? compare(subject, threshold, embedding, result.faces) : result;
 }
 
 Result FaceAuth::identify(const uint8_t *jpeg, size_t len, const char *const *subjects, size_t count,

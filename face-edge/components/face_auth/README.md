@@ -12,7 +12,11 @@ JPEG (camera do firmware gọi sở hữu) -> giải mã RGB888 -> MSRMNP (bbox 
   và đăng ký lại.
 - `enroll(jpeg, len, subject, sample)`: lưu mẫu thứ `sample` (tối đa 5) cho `subject`.
 - `verify(jpeg, len, subject, threshold)`: so 1:1 với mọi mẫu của `subject`, lấy điểm cao nhất.
-- `identify(...)`: so 1:N trên danh sách subject (dùng cho công cụ thử).
+- `identify(...)`: so 1:N trên danh sách subject.
+- `inspect(jpeg, len, limits)`: chỉ giải mã + tìm mặt và chấm chất lượng khung (một mặt, cỡ
+  mặt, lệch tâm/chạm mép, độ sáng, độ nét = phương sai Laplacian vùng mặt). Nếu `OK`, giữ ảnh
+  và điểm mốc để `verify_inspected()` / `enroll_inspected()` chỉ còn chạy MFN trên đúng khung
+  đó. Firmware SmartLock dùng để tự chụp và hiện gợi ý.
 - Trạng thái trả về: `MATCH`, `NO_MATCH`, `NO_FACE`, `MULTIPLE_FACES`, `NOT_ENROLLED`,
   `DECODE_ERROR`, `ERROR`. Nhiều mặt luôn bị từ chối.
 
